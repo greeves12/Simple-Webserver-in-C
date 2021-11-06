@@ -17,27 +17,22 @@ void m_strcat(char [], char[], char[]);
 void shift_array(char [], int);
 void add_carriage(char[]);
 
-char page[] =
 
-    "HTTP/1.1 200 OK\r\n"
-    "Content-Type: text/html; charset=UTF-8\r\n\r\n";
-/*    "<!DOCTYPE html>\r\n"
-    "<html><head><title>Test</title>\r\n"
-    "<style>body { background-color: #FFFF00 }</style></head>\r\n"
-    "<body><center><h1>Hello World!</h1><br></center></body></html>\r\n";
-*/
 int main(){
     struct sockaddr_in server_addr, client_addr;
     socklen_t length = sizeof(client_addr);
     int pid;
     int server_fd, client_fd;
     int port = 5000;
-
+    int on = 1;
+    
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if(server_fd < 0){
 	write_error("Could not create the socket");
     }
+
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(int));
     
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -99,16 +94,32 @@ void handle_connection(int client_fd){
 
     get_page(buffer, page_buffer);
 
-    if(!m_strcmp(page_buffer, "favicon.ico")){
+    if(!m_strcmp(page_buffer, " ")){
 	m_strcat("root/", page_buffer, page_buffer);
 
-	if(open(page_buffer, O_RDONLY) < 0){
-	    //run html page not found
-	    printf("err\n");
-	}else{
-	    //run page
+	filefd = open(page_buffer, O_RDONLY);
+	close(filefd);
+	
+	if(filefd < 0){
+	    clear_buffer(page_buffer, MAX_ARRAY);
+	    m_strcat("root/", "mant.html", page_buffer);
 
-	    printf("ran\n");
+	    filefd = open(page_buffer, O_RDONLY);
+	    
+
+	    if(filefd > 0){
+		clear_buffer(page_buffer, MAX_ARRAY);
+		filesize = read(filefd, page_buffer, MAX_ARRAY -1); 
+
+		if(filesize > 0){
+		    page_buffer[filesize - 1] = '\0';
+		}
+	    }
+	    close(filefd);
+	}else{
+	    
+
+	   
 	}
     }else if(m_strcmp(page_buffer, " ")){
         m_strcat("root/", "index.html", page_buffer);

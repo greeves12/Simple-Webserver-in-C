@@ -7,16 +7,19 @@
 
 void write_error(char *arr);
 void handle_connection(int);
+int get_page(char[], char[]);
+void clear_buffer(char[], int);
+
 
 char page[] =
 
     "HTTP/1.1 200 OK\r\n"
-    "Content-Type: text/html; charset=UTF-8\r\n\r\n"
-    "<!DOCTYPE html>\r\n"
+    "Content-Type: text/html; charset=UTF-8\r\n\r\n";
+/*    "<!DOCTYPE html>\r\n"
     "<html><head><title>Test</title>\r\n"
     "<style>body { background-color: #FFFF00 }</style></head>\r\n"
     "<body><center><h1>Hello World!</h1><br></center></body></html>\r\n";
-
+*/
 int main(){
     struct sockaddr_in server_addr, client_addr;
     socklen_t length = sizeof(client_addr);
@@ -79,11 +82,58 @@ void write_error(char *arr){
 
 void handle_connection(int client_fd){
     char buffer[5000];
-
+    char page_buffer[8000];
+    
+    int i = 0;
     read(client_fd, buffer, 4999);
 
-    printf("%s\n", buffer);
-//    printf("Client connected\n");
+    while(buffer[i] != '\n'){
+	printf("%c", buffer[i]);
+	i++;
+    }
+
+    printf("\n");
+
+    get_page(buffer, page_buffer);
+
+    i = 0;
+    while(page_buffer[i] != '\0'){
+	printf("%c", page_buffer[i]);
+	i++;
+    }
+
+    printf("\n");
+
+    
+//printf("Client connected\n");
 
     write(client_fd, page, sizeof(page) -1);
+}
+
+/*
+Purpose: to locate and send back the page that the client requested from the
+         server. 
+
+
+Example: assume the client requested the page called home.html. The function
+         will strip the home.html from the html protocol request and store it
+         in the page array.
+*/
+
+int get_page(char client[], char page[]){
+    int x;
+    int i = 0;
+    for(x = 5; client[x] != ' '; x++){
+	page[i] = client[x];
+	i++;
+    }
+    page[i+1] = '\0';
+}
+
+void clear_buffer(char buf[], int size){
+    int x;
+
+    for(x = 0; x < size; x++){
+	buf[x] = '\0';
+    }
 }

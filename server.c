@@ -4,12 +4,18 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <fcntl.h>
+
+#define MAX_ARRAY 15000
 
 void write_error(char *arr);
 void handle_connection(int);
 int get_page(char[], char[]);
 void clear_buffer(char[], int);
-
+int m_strcmp(char[], char[]);
+void m_strcat(char [], char[], char[]);
+void shift_array(char [], int);
+void add_carriage(char[]);
 
 char page[] =
 
@@ -82,32 +88,52 @@ void write_error(char *arr){
 
 void handle_connection(int client_fd){
     char buffer[5000];
-    char page_buffer[8000];
+    char page_buffer[MAX_ARRAY];
+    int filefd, filesize;
     
     int i = 0;
+    int x = 0;
     read(client_fd, buffer, 4999);
 
-    while(buffer[i] != '\n'){
-	printf("%c", buffer[i]);
-	i++;
-    }
-
-    printf("\n");
+    printf("Client connected\n");
 
     get_page(buffer, page_buffer);
 
-    i = 0;
-    while(page_buffer[i] != '\0'){
-	printf("%c", page_buffer[i]);
-	i++;
+    if(!m_strcmp(page_buffer, "favicon.ico")){
+	m_strcat("root/", page_buffer, page_buffer);
+
+	if(open(page_buffer, O_RDONLY) < 0){
+	    //run html page not found
+	    printf("err\n");
+	}else{
+	    //run page
+
+	    printf("ran\n");
+	}
+    }else if(m_strcmp(page_buffer, " ")){
+        m_strcat("root/", "index.html", page_buffer);
+
+	filefd = open(page_buffer, O_RDONLY);
+	
+	if(filefd < 0){
+	    
+	}else{
+	    clear_buffer(page_buffer, MAX_ARRAY);
+	    filesize = read(filefd, page_buffer, MAX_ARRAY - 1);
+
+	    close(filefd);
+
+	    if(filesize > 0){
+		page_buffer[filesize - 1] = '\0';
+	    }
+	}
     }
-
-    printf("\n");
-
     
-//printf("Client connected\n");
-
-    write(client_fd, page, sizeof(page) -1);
+    m_strcat("HTTP/1.1 200 OK\r\n"
+	     "Content-Type: text/html; charset=UTF-8\r\n\r\n",
+	     page_buffer, page_buffer);
+    
+    write(client_fd, page_buffer, sizeof(page_buffer) - 1);
 }
 
 /*
@@ -135,5 +161,72 @@ void clear_buffer(char buf[], int size){
 
     for(x = 0; x < size; x++){
 	buf[x] = '\0';
+    }
+}
+
+int m_strcmp(char arr1[], char arr2[]){
+    int index = 0;
+    
+    while(arr1[index] != '\0' && arr2[index] != '\0'){
+	if(arr1[index] != arr2[index]){
+	    return 0;
+	}
+    }
+
+    return 1;
+}
+
+
+void m_strcat(char arr1[], char arr2[], char copied[]){
+    char temp[MAX_ARRAY];
+    int x = 0;
+    int i = 0;
+    
+    while(arr1[x] != '\0'){
+	temp[x] = arr1[x];
+	x++;
+    }
+
+    while(arr2[i] != '\0'){
+	temp[x] = arr2[i];
+	x++;
+	i++;
+    }
+
+    temp[x] = '\0';
+    
+    x = 0;
+
+    while(temp[x] != '\0'){
+	copied[x] = temp[x];
+	x++;
+    }
+    copied[x] = '\0';
+}
+
+void add_carriage(char arr[]){
+    int i = 0;
+
+    while(arr[i] != '\0'){
+	if(arr[i] == '\n'){
+	    shift_array(arr, i);
+	    arr[i] = '\r';
+	    i++;
+	}
+	i++;
+    }
+}
+
+void shift_array(char arr[], int index){
+    int i;
+    int x;
+
+    while(arr[x] != '\0'){
+	x++;
+    }
+    x = x+1;
+    
+    for(i = x; i > index; i--){
+	arr[i] = arr[i - 1];
     }
 }

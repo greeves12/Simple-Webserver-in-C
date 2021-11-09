@@ -5,6 +5,9 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <sys/sendfile.h>
+#include <sys/stat.h>
+#include <string.h>
 
 #define MAX_ARRAY 15000
 
@@ -16,7 +19,10 @@ int m_strcmp(char[], char[]);
 void m_strcat(char [], char[], char[]);
 void shift_array(char [], int);
 void add_carriage(char[]);
-
+int is_image_requested(char[]);
+off_t get_file_length(int);
+void send_new(int, char[]);
+int m_strlen(char[]);
 
 int main(){
     struct sockaddr_in server_addr, client_addr;
@@ -75,35 +81,95 @@ int main(){
     return 0;
 }
 
+void send_new(int fd, char msg[]) {
+    int len = m_strlen(msg);
+
+    if (send(fd, msg, len, 0) == -1) {
+	printf("Error in send\n");
+    }
+}
+
+off_t get_file_length(int fd){
+    struct stat file;
+
+    if(fstat(fd, &file) == 0){
+	return file.st_size;
+    }
+
+    return -1;
+}
 
 void write_error(char *arr){
     perror(arr);
     exit(1);
 }
 
+int m_strlen(char str[]){
+    int index = 0;
+
+    while(str[index] != '\0'){
+	index++;
+    }
+    return index;
+}
+
 void handle_connection(int client_fd){
     char buffer[5000];
     char page_buffer[MAX_ARRAY];
     int filefd, filesize;
-    
+    char *pic;
+    ssize_t f = 6;
+    off_t t;
     int i = 0;
     int x = 0;
     read(client_fd, buffer, 4999);
-
-    printf("Client connected\n");
-
+    
     get_page(buffer, page_buffer);
 
+    
+    if(is_image_requested(page_buffer)){
+	m_strcat("images/", page_buffer, page_buffer);
+
+	filefd = open(page_buffer, O_RDONLY);
+
+	if(filefd < 0){
+	    return;
+	}
+
+	t = get_file_length(filefd);
+
+	send_new(client_fd, "HTTP/1.1 200 OK\r\n");
+	send_new(client_fd, "Operating Systems\r\n\r\n");
+	
+ 	off_t offset = 0;
+	
+	for(size_t size_to_send = t; size_to_send > 0; ){
+	    ssize_t sent = sendfile(client_fd, filefd, &offset, size_to_send);
+
+	    if(sent <= 0){
+		break;
+	    }
+	    size_to_send -= sent;
+	}
+
+	close(filefd);
+       
+	return;
+    }
+
+
+    
     if(!m_strcmp(page_buffer, " ")){
 	m_strcat("root/", page_buffer, page_buffer);
 
 	filefd = open(page_buffer, O_RDONLY);
-	close(filefd);
+	
 	
 	if(filefd < 0){
 	    clear_buffer(page_buffer, MAX_ARRAY);
 	    m_strcat("root/", "mant.html", page_buffer);
-
+	    close(filefd);
+	    
 	    filefd = open(page_buffer, O_RDONLY);
 	    
 
@@ -117,9 +183,14 @@ void handle_connection(int client_fd){
 	    }
 	    close(filefd);
 	}else{
-	    
+	    clear_buffer(page_buffer, MAX_ARRAY);
 
-	   
+	    filesize = read(filefd, page_buffer, MAX_ARRAY -1);
+	    close(filefd);
+	    
+	    if(filesize > 0){
+		page_buffer[filesize - 1] = '\0';
+	    }
 	}
     }else if(m_strcmp(page_buffer, " ")){
         m_strcat("root/", "index.html", page_buffer);
@@ -143,8 +214,9 @@ void handle_connection(int client_fd){
     m_strcat("HTTP/1.1 200 OK\r\n"
 	     "Content-Type: text/html; charset=UTF-8\r\n\r\n",
 	     page_buffer, page_buffer);
-    
+
     write(client_fd, page_buffer, sizeof(page_buffer) - 1);
+    
 }
 
 /*
@@ -182,6 +254,7 @@ int m_strcmp(char arr1[], char arr2[]){
 	if(arr1[index] != arr2[index]){
 	    return 0;
 	}
+	index++;
     }
 
     return 1;
@@ -240,4 +313,51 @@ void shift_array(char arr[], int index){
     for(i = x; i > index; i--){
 	arr[i] = arr[i - 1];
     }
+}
+
+
+int is_image_requested(char file[]){
+    char extension[8];
+    int index = 0;
+    int found = 0;
+    int index2 = 0;
+
+    
+    while(file[index] != '\0'){
+
+	if(file[index] == '.'){
+	    found = 1;
+	    index++;
+	    break;
+	}
+	index++;
+    }
+
+    
+    if(found == 1){
+       
+	while(file[index] != '\0'){
+	    extension[index2] = file[index];
+	    index++;
+	    index2++;
+	}
+	extension[index2] = '\0';	
+
+	if(m_strcmp(extension, "png")){
+	    return 1;
+	}else if(m_strcmp(extension, "jpeg")){
+	    return 1;
+	}else if(m_strcmp(extension, "jpg")){
+	    return 1;
+	} else if(m_strcmp(extension, "ico")){
+	    
+	    return 1;
+	}else if(m_strcmp(extension, "gif")){
+	    return 1;
+	}
+    }
+    
+    
+
+    return 0;
 }

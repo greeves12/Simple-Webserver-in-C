@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
-#include <string.h>
 
 #define MAX_ARRAY 15000
 
@@ -23,6 +22,9 @@ int is_image_requested(char[]);
 off_t get_file_length(int);
 void send_new(int, char[]);
 int m_strlen(char[]);
+void execute_php(char[], int);
+int is_php(char[]);
+void m_strcpy(char src[], char desc[]);
 
 int main(){
     struct sockaddr_in server_addr, client_addr;
@@ -104,6 +106,36 @@ void write_error(char *arr){
     exit(1);
 }
 
+void execute_php(char file[], int client_fd){
+    send_new(client_fd,
+	     "HTTP/1.1 200 OK\n Server: Web Server in C\n Connection: close\n");
+    dup2(client_fd, STDOUT_FILENO);
+
+    char script[500];
+    m_strcpy("SCRIPT_FILENAME=", script);
+    m_strcat(script, file, file);
+    putenv("GATEWAY_INTERFACE=CGI/1.1");
+    putenv(file);
+    putenv("QUERY_STRING=");
+    putenv("REQUEST_METHOD=GET");
+    putenv("REDIRECT_STATUS=true");
+    putenv("SERVER_PROTOCOL=HTTP/1.1");
+    putenv("REMOTE_HOST=127.0.0.1");
+    execl("/usr/bin/php-cgi", "php-cgi", NULL);
+
+}
+
+void m_strcpy(char src[], char desc[]){
+    int index = 0;
+
+    while(src[index] != '\0'){
+	desc[index] = src[index];
+	index++;
+    }
+    
+    desc[index] = '\0';
+}
+
 int m_strlen(char str[]){
     int index = 0;
 
@@ -126,6 +158,25 @@ void handle_connection(int client_fd){
     
     get_page(buffer, page_buffer);
 
+    if(is_php(page_buffer)){
+	m_strcat("root/", page_buffer, page_buffer);
+
+	filefd = open(page_buffer, O_RDONLY);
+
+	if(filefd < 0)
+	    return;
+
+	close(filefd);
+
+	execute_php(page_buffer, client_fd);
+	sleep(1);
+	close(client_fd);
+	exit(1);
+	
+	return;
+    }
+
+    
     
     if(is_image_requested(page_buffer)){
 	m_strcat("images/", page_buffer, page_buffer);
@@ -321,7 +372,6 @@ int is_image_requested(char file[]){
     int index = 0;
     int found = 0;
     int index2 = 0;
-
     
     while(file[index] != '\0'){
 
@@ -332,7 +382,6 @@ int is_image_requested(char file[]){
 	}
 	index++;
     }
-
     
     if(found == 1){
        
@@ -356,8 +405,41 @@ int is_image_requested(char file[]){
 	    return 1;
 	}
     }
-    
-    
+    return 0;
+}
 
+int is_php(char file[]){
+    char extension[8];
+    int index = 0;
+    int found = 0;
+    int index2 = 0;
+
+    
+    while(file[index] != '\0'){
+
+	if(file[index] == '.'){
+	    found = 1;
+	    index++;
+	    break;
+	}
+	index++;
+    }
+
+    
+    if(found == 1){
+       
+	while(file[index] != '\0'){
+	    extension[index2] = file[index];
+	    index++;
+	    index2++;
+	}
+	extension[index2] = '\0';	
+
+	if(m_strcmp(extension, "php")){
+	    return 1;
+	}
+    }
+    
+   
     return 0;
 }

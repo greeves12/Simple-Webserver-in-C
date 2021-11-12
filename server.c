@@ -22,7 +22,7 @@ int is_image_requested(char[]);
 off_t get_file_length(int);
 void send_new(int, char[]);
 int m_strlen(char[]);
-void execute_php(char[], int);
+void execute_php(char[], int, char[]);
 int is_php(char[]);
 void m_strcpy(char src[], char desc[]);
 
@@ -106,7 +106,7 @@ void write_error(char *arr){
     exit(1);
 }
 
-void execute_php(char file[], int client_fd){
+void execute_php(char file[], int client_fd, char buffer[]){
     send_new(client_fd,
 	     "HTTP/1.1 200 OK\n Server: Web Server in C\n Connection: close\n");
     dup2(client_fd, STDOUT_FILENO);
@@ -158,6 +158,13 @@ void handle_connection(int client_fd){
     
     get_page(buffer, page_buffer);
 
+    while(buffer[i] != '\0'){
+	printf("%c", buffer[i]);
+	i++;
+    }
+    printf("\n");
+
+    
     if(is_php(page_buffer)){
 	m_strcat("root/", page_buffer, page_buffer);
 
@@ -168,7 +175,7 @@ void handle_connection(int client_fd){
 
 	close(filefd);
 
-	execute_php(page_buffer, client_fd);
+	execute_php(page_buffer, client_fd, buffer);
 	sleep(1);
 	close(client_fd);
 	exit(1);

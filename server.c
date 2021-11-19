@@ -7,11 +7,15 @@
 #include <fcntl.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
+#include <pthread.h>
+#include <semaphore.h>
 
 #define MAX_ARRAY 15000
 
+sem_t mutex;
+
 void write_error(char *arr);
-void handle_connection(int);
+void* handle_connection(void*);
 int get_page(char[], char[]);
 void clear_buffer(char[], int);
 int m_strcmp(char[], char[]);
@@ -65,19 +69,9 @@ int main(){
 	    perror("Connection refused");
 	}
 	
-	pid = fork();
+	pthread_t tid;
 
-	if(pid < 0){
-	    write_error("Cannot fork");
-	}
-
-	if(pid == 0){
-	    close(server_fd);
-	    handle_connection(client_fd);
-	    exit(0);
-	}
-
-	close(client_fd);
+	pthread_create(&tid, NULL, handle_connection, &client_fd);
     }
 
     return 0;
@@ -121,6 +115,8 @@ void execute_php(char file[], int client_fd, char buffer[]){
     putenv("REDIRECT_STATUS=true");
     putenv("SERVER_PROTOCOL=HTTP/1.1");
     putenv("REMOTE_HOST=127.0.0.1");
+    int pid = fork();
+    if(pid == 0)
     execl("/usr/bin/php-cgi", "php-cgi", NULL);
 
 }
@@ -145,8 +141,9 @@ int m_strlen(char str[]){
     return index;
 }
 
-void handle_connection(int client_fd){
+void *handle_connection(void* client_f){
     char buffer[5000];
+    int client_fd = *((int *) client_f);
     char page_buffer[MAX_ARRAY];
     int filefd, filesize;
     char *pic;
@@ -170,16 +167,12 @@ void handle_connection(int client_fd){
 
 	filefd = open(page_buffer, O_RDONLY);
 
-	if(filefd < 0)
-	    return;
+	if(filefd > 0){
+	    close(filefd);
 
-	close(filefd);
-
-	execute_php(page_buffer, client_fd, buffer);
-	sleep(1);
-	close(client_fd);
-	exit(1);
-	
+	    execute_php(page_buffer, client_fd, buffer);
+	    sleep(1);
+	}
     }else{
 	if(is_image_requested(page_buffer)){
 	    m_strcat("images/", page_buffer, page_buffer);
@@ -207,6 +200,8 @@ void handle_connection(int client_fd){
 	    close(filefd);    
 	}
     }
+    close(client_fd);
+    pthread_exit(NULL);
 }
 
 /*

@@ -180,101 +180,33 @@ void handle_connection(int client_fd){
 	close(client_fd);
 	exit(1);
 	
-	return;
-    }
-
-    
-    
-    if(is_image_requested(page_buffer)){
-	m_strcat("images/", page_buffer, page_buffer);
-
+    }else{
+	if(is_image_requested(page_buffer)){
+	    m_strcat("images/", page_buffer, page_buffer);
+	}else{
+	    m_strcat("root/", page_buffer, page_buffer);
+	}
 	filefd = open(page_buffer, O_RDONLY);
 
-	if(filefd < 0){
-	    return;
-	}
+	if(filefd > 0){
+	    t = get_file_length(filefd);
+	    send_new(client_fd, "HTTP/1.1 200 OK\r\n");
+	    send_new(client_fd, "Operating Systems\r\n\r\n");
+	    off_t offset = 0;
 
-	t = get_file_length(filefd);
+	    for(size_t size_to_send = t; size_to_send > 0; ){
+		ssize_t sent = sendfile(client_fd, filefd, &offset,
+					size_to_send);
 
-	send_new(client_fd, "HTTP/1.1 200 OK\r\n");
-	send_new(client_fd, "Operating Systems\r\n\r\n");
-	
- 	off_t offset = 0;
-	
-	for(size_t size_to_send = t; size_to_send > 0; ){
-	    ssize_t sent = sendfile(client_fd, filefd, &offset, size_to_send);
-
-	    if(sent <= 0){
-		break;
-	    }
-	    size_to_send -= sent;
-	}
-
-	close(filefd);
-       
-	return;
-    }
-
-
-    
-    if(!m_strcmp(page_buffer, " ")){
-	m_strcat("root/", page_buffer, page_buffer);
-
-	filefd = open(page_buffer, O_RDONLY);
-	
-	
-	if(filefd < 0){
-	    clear_buffer(page_buffer, MAX_ARRAY);
-	    m_strcat("root/", "mant.html", page_buffer);
-	    close(filefd);
-	    
-	    filefd = open(page_buffer, O_RDONLY);
-	    
-
-	    if(filefd > 0){
-		clear_buffer(page_buffer, MAX_ARRAY);
-		filesize = read(filefd, page_buffer, MAX_ARRAY -1); 
-
-		if(filesize > 0){
-		    page_buffer[filesize - 1] = '\0';
+		if(sent <= 0){
+		    break;
 		}
+		size_to_send -= sent;
 	    }
-	    close(filefd);
-	}else{
-	    clear_buffer(page_buffer, MAX_ARRAY);
 
-	    filesize = read(filefd, page_buffer, MAX_ARRAY -1);
-	    close(filefd);
-	    
-	    if(filesize > 0){
-		page_buffer[filesize - 1] = '\0';
-	    }
-	}
-    }else if(m_strcmp(page_buffer, " ")){
-        m_strcat("root/", "index.html", page_buffer);
-
-	filefd = open(page_buffer, O_RDONLY);
-	
-	if(filefd < 0){
-	    
-	}else{
-	    clear_buffer(page_buffer, MAX_ARRAY);
-	    filesize = read(filefd, page_buffer, MAX_ARRAY - 1);
-
-	    close(filefd);
-
-	    if(filesize > 0){
-		page_buffer[filesize - 1] = '\0';
-	    }
+	    close(filefd);    
 	}
     }
-    
-    m_strcat("HTTP/1.1 200 OK\r\n"
-	     "Content-Type: text/html; charset=UTF-8\r\n\r\n",
-	     page_buffer, page_buffer);
-
-    write(client_fd, page_buffer, sizeof(page_buffer) - 1);
-    
 }
 
 /*

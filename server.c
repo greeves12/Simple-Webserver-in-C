@@ -12,6 +12,25 @@
 
 #define MAX_ARRAY 15000
 
+typedef struct {
+    void (*function)(void *);
+    void *argument;
+} threadpool_task_t;
+
+struct threadpool_t {
+    pthread_mutex_t lock;     /* mutex */
+    pthread_cond_t notify;    /* Conditional variable */
+    pthread_t *threads;       /* Starting Pointer of Thread Array */
+    threadpool_task_t *queue; /* Starting Pointer of Task Queue Array */
+    int thread_count;         /* Number of threads */
+    int queue_size;           /* Task queue length */
+    int head;                 /* Current task queue head */
+    int tail;                 /* End of current task queue */
+    int count;                /* Number of tasks currently to be run */
+    int shutdown;             /* Is the current state of the thread pool closed? */
+    int started;              /* Number of threads running */
+};
+
 sem_t mutex;
 
 void write_error(char *arr);
@@ -37,7 +56,8 @@ int main(){
     int server_fd, client_fd;
     int port = 5000;
     int on = 1;
-    
+
+    sem_init(&mutex, 0, 1);
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if(server_fd < 0){
@@ -71,9 +91,12 @@ int main(){
 	
 	pthread_t tid;
 
+       
 	pthread_create(&tid, NULL, handle_connection, &client_fd);
+	sleep(1);
     }
 
+    sem_destroy(&mutex);
     return 0;
 }
 
@@ -155,16 +178,17 @@ void *handle_connection(void* client_f){
     
     get_page(buffer, page_buffer);
 
-    while(buffer[i] != '\0'){
+/*    while(buffer[i] != '\0'){
 	printf("%c", buffer[i]);
 	i++;
     }
     printf("\n");
-
+*/
     
     if(is_php(page_buffer)){
 	m_strcat("root/", page_buffer, page_buffer);
 
+	sem_wait(&mutex);
 	filefd = open(page_buffer, O_RDONLY);
 
 	if(filefd > 0){
@@ -173,12 +197,14 @@ void *handle_connection(void* client_f){
 	    execute_php(page_buffer, client_fd, buffer);
 	    sleep(1);
 	}
+	sem_post(&mutex);
     }else{
 	if(is_image_requested(page_buffer)){
 	    m_strcat("images/", page_buffer, page_buffer);
 	}else{
 	    m_strcat("root/", page_buffer, page_buffer);
 	}
+	sem_wait(&mutex);
 	filefd = open(page_buffer, O_RDONLY);
 
 	if(filefd > 0){
@@ -199,6 +225,7 @@ void *handle_connection(void* client_f){
 
 	    close(filefd);    
 	}
+	sem_post(&mutex);
     }
     close(client_fd);
     pthread_exit(NULL);

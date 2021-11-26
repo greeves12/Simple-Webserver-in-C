@@ -11,30 +11,21 @@
 #include <semaphore.h>
 
 #define MAX_ARRAY 15000
+#define MAX_THREADS 10
 
 typedef struct {
-    void (*function)(void *);
-    void *argument;
-} threadpool_task_t;
+    int client_fd;
+} task;
 
-struct threadpool_t {
-    pthread_mutex_t lock;     /* mutex */
-    pthread_cond_t notify;    /* Conditional variable */
-    pthread_t *threads;       /* Starting Pointer of Thread Array */
-    threadpool_task_t *queue; /* Starting Pointer of Task Queue Array */
-    int thread_count;         /* Number of threads */
-    int queue_size;           /* Task queue length */
-    int head;                 /* Current task queue head */
-    int tail;                 /* End of current task queue */
-    int count;                /* Number of tasks currently to be run */
-    int shutdown;             /* Is the current state of the thread pool closed? */
-    int started;              /* Number of threads running */
-};
+sem_t mutex, task_mutex;
 
-sem_t mutex;
+task tasks[MAX_THREADS];
+int task_fill_level = 0;
 
 void write_error(char *arr);
-void* handle_connection(void*);
+void handle_connection(int);
+void* thread_pool(void *);
+
 int get_page(char[], char[]);
 void clear_buffer(char[], int);
 int m_strcmp(char[], char[]);
@@ -58,6 +49,7 @@ int main(){
     int on = 1;
 
     sem_init(&mutex, 0, 1);
+    sem_init(&task_mutex, 0, 1);
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if(server_fd < 0){
@@ -82,6 +74,19 @@ int main(){
 	write_error("cannot listen");
     }
 
+    pthread_t threads[MAX_THREADS];
+    int x;
+
+    for(x = 0; x < MAX_THREADS; x++){
+        tasks[x].client_fd = -1;
+    }
+    
+    for(x = 0; x < MAX_THREADS; x++){
+	if(pthread_create(&threads[x], NULL, &thread_pool, NULL) != 0){
+	    perror("Thread creation failed");
+	}
+    }
+    
     while(1){
 	client_fd = accept(server_fd, (struct sockaddr*)&client_addr, &length);
 
@@ -89,15 +94,54 @@ int main(){
 	    perror("Connection refused");
 	}
 	
-	pthread_t tid;
+	int flag = 1;
 
-       
-	pthread_create(&tid, NULL, handle_connection, &client_fd);
-	sleep(1);
+//	sem_wait(&task_mutex);
+	for(x = 0; x < MAX_THREADS; x++){
+	    if(tasks[x].client_fd = -1){
+		tasks[x].client_fd = client_fd;
+		flag = 0;
+		task_fill_level = task_fill_level + 1;
+		break;
+	    }
+	}
+//	sem_post(&task_mutex);
+	
+	if(flag == 1){
+	    perror("Thread queue full. Connection refused");
+	    close(client_fd);
+	}
+    }
+
+    for(x = 0; x < MAX_THREADS; x++){
+	if(pthread_join(threads[x], NULL) != 0){
+	    perror("Cant join thread");
+	}
     }
 
     sem_destroy(&mutex);
+    sem_destroy(&task_mutex);
+    
     return 0;
+}
+
+void* thread_pool(void* args){
+    while(1){
+	task task;
+	if(task_fill_level > 0){
+	sem_wait(&task_mutex);
+
+	task = tasks[0];
+	int x;
+
+	for(int x = 0; x < task_fill_level - 1; x++){
+	    tasks[x] = tasks[x + 1];
+	}
+	task_fill_level--;
+	sem_post(&task_mutex);
+	handle_connection(task.client_fd);
+	}
+	}    
 }
 
 void send_new(int fd, char msg[]) {
@@ -164,9 +208,8 @@ int m_strlen(char str[]){
     return index;
 }
 
-void *handle_connection(void* client_f){
+void handle_connection(int client_fd){
     char buffer[5000];
-    int client_fd = *((int *) client_f);
     char page_buffer[MAX_ARRAY];
     int filefd, filesize;
     char *pic;

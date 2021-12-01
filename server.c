@@ -11,20 +11,22 @@
 #include <semaphore.h>
 
 #define MAX_ARRAY 15000
-#define MAX_THREADS 10
+#define MAX_THREADS 5
 
 typedef struct {
     int client_fd;
 } task;
 
-sem_t mutex, task_mutex;
+sem_t mutex, task_mutex, thread_mutex;
 
 task tasks[100];
 int task_fill_level = 0;
+int threads_level = MAX_THREADS;
 
 void write_error(char *arr);
 void handle_connection(int);
 void* thread_pool(void *);
+void* worker_thread(void *);
 
 int get_page(char[], char[]);
 void clear_buffer(char[], int);
@@ -50,6 +52,7 @@ int main(){
 
     sem_init(&mutex, 0, 1);
     sem_init(&task_mutex, 0, 1);
+    sem_init(&thread_mutex,0,1);
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     if(server_fd < 0){
@@ -76,6 +79,9 @@ int main(){
 
     pthread_t threads[MAX_THREADS];
     int x;
+    pthread_t worker_tid;
+
+    pthread_create(&worker_tid, NULL, &worker_thread, NULL);
 
     for(x = 0; x < MAX_THREADS; x++){
         tasks[x].client_fd = -1;
@@ -103,16 +109,28 @@ int main(){
 	    
 	
 	sem_post(&task_mutex);
-	
-
-
+       
     }
 
    
     sem_destroy(&mutex);
     sem_destroy(&task_mutex);
+    sem_destroy(&thread_mutex);
     
     return 0;
+}
+
+void* worker_thread(void* args){
+    while(1){
+	sem_wait(&thread_mutex);
+
+	while(threads_level < MAX_THREADS){
+	    pthread_t tid;
+	    pthread_create(&tid, NULL, &thread_pool, NULL);
+	    threads_level++;
+	}
+	sem_post(&thread_mutex);
+    }
 }
 
 void* thread_pool(void* args){
@@ -134,8 +152,8 @@ void* thread_pool(void* args){
 	}
 	sem_post(&task_mutex);
 	if(found == 1)
-	handle_connection(task.client_fd);
-	
+	    handle_connection(task.client_fd);
+
     }    
 }
 
@@ -213,13 +231,13 @@ void handle_connection(int client_fd){
     int i = 0;
     int x = 0;
 
-    sem_wait(&task_mutex);
+//    sem_wait(&task_mutex);
     read(client_fd, buffer, 4999);
 
-    sem_post(&task_mutex);
+    //  sem_post(&task_mutex);
     get_page(buffer, page_buffer);
 
-    printf("%d\n", client_fd);
+    //printf("%d\n", client_fd);
 /*    while(buffer[i] != '\0'){
 	printf("%c", buffer[i]);
 	i++;
@@ -269,8 +287,17 @@ void handle_connection(int client_fd){
 	}
 	sem_post(&mutex);
     }
+
+    sem_wait(&task_mutex);
     close(client_fd);
-    //pthread_exit(NULL);
+    sem_post(&task_mutex);
+
+    sem_wait(&thread_mutex);
+    threads_level--;
+    sem_post(&thread_mutex);
+
+    
+    pthread_exit(NULL);
 }
 
 /*

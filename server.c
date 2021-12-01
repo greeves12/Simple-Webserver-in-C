@@ -19,7 +19,7 @@ typedef struct {
 
 sem_t mutex, task_mutex;
 
-task tasks[MAX_THREADS];
+task tasks[100];
 int task_fill_level = 0;
 
 void write_error(char *arr);
@@ -94,31 +94,21 @@ int main(){
 	    perror("Connection refused");
 	}
 	
-	int flag = 1;
-
-//	sem_wait(&task_mutex);
-	for(x = 0; x < MAX_THREADS; x++){
-	    if(tasks[x].client_fd = -1){
-		tasks[x].client_fd = client_fd;
-		flag = 0;
-		task_fill_level = task_fill_level + 1;
-		break;
-	    }
-	}
-//	sem_post(&task_mutex);
 	
-	if(flag == 1){
-	    perror("Thread queue full. Connection refused");
-	    close(client_fd);
-	}
+	sem_wait(&task_mutex);
+	
+	tasks[task_fill_level].client_fd = client_fd;
+	
+	task_fill_level++;
+	    
+	
+	sem_post(&task_mutex);
+	
+
+
     }
 
-    for(x = 0; x < MAX_THREADS; x++){
-	if(pthread_join(threads[x], NULL) != 0){
-	    perror("Cant join thread");
-	}
-    }
-
+   
     sem_destroy(&mutex);
     sem_destroy(&task_mutex);
     
@@ -128,20 +118,25 @@ int main(){
 void* thread_pool(void* args){
     while(1){
 	task task;
-	if(task_fill_level > 0){
+	int found = 0;
 	sem_wait(&task_mutex);
+	if(task_fill_level > 0){
+	
+	    found = 1;
+	    task = tasks[0];
+	    int x;
 
-	task = tasks[0];
-	int x;
+	    for(int x = 0; x < task_fill_level - 1; x++){
+		tasks[x] = tasks[x + 1];
+	    }
+	    task_fill_level--;
 
-	for(int x = 0; x < task_fill_level - 1; x++){
-	    tasks[x] = tasks[x + 1];
 	}
-	task_fill_level--;
 	sem_post(&task_mutex);
+	if(found == 1)
 	handle_connection(task.client_fd);
-	}
-	}    
+	
+    }    
 }
 
 void send_new(int fd, char msg[]) {
@@ -217,10 +212,14 @@ void handle_connection(int client_fd){
     off_t t;
     int i = 0;
     int x = 0;
+
+    sem_wait(&task_mutex);
     read(client_fd, buffer, 4999);
-    
+
+    sem_post(&task_mutex);
     get_page(buffer, page_buffer);
 
+    printf("%d\n", client_fd);
 /*    while(buffer[i] != '\0'){
 	printf("%c", buffer[i]);
 	i++;
@@ -271,7 +270,7 @@ void handle_connection(int client_fd){
 	sem_post(&mutex);
     }
     close(client_fd);
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
 }
 
 /*

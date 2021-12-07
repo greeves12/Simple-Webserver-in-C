@@ -32,8 +32,6 @@ int get_page(char[], char[]);
 void clear_buffer(char[], int);
 int m_strcmp(char[], char[]);
 void m_strcat(char [], char[], char[]);
-void shift_array(char [], int);
-void add_carriage(char[]);
 int is_image_requested(char[]);
 off_t get_file_length(int);
 void send_new(int, char[]);
@@ -121,7 +119,6 @@ int main(){
 
 
 void* thread_pool(void* args){
-    pthread_t tid = pthread_self();
     while(1){
 	task task;
 	
@@ -212,13 +209,8 @@ int m_strlen(char str[]){
 void handle_connection(int client_fd){
     char buffer[5000];
     char page_buffer[MAX_ARRAY];
-    int filefd, filesize;
-    char *pic;
-    ssize_t f = 6;
+    int filefd;
     off_t t;
-    int i = 0;
-    int x = 0;
-
     
     clear_buffer(buffer,1);
     clear_buffer(page_buffer,1);
@@ -344,34 +336,6 @@ void m_strcat(char arr1[], char arr2[], char copied[]){
     }
     copied[x] = '\0';
 }
-
-void add_carriage(char arr[]){
-    int i = 0;
-
-    while(arr[i] != '\0'){
-	if(arr[i] == '\n'){
-	    shift_array(arr, i);
-	    arr[i] = '\r';
-	    i++;
-	}
-	i++;
-    }
-}
-
-void shift_array(char arr[], int index){
-    int i;
-    int x;
-
-    while(arr[x] != '\0'){
-	x++;
-    }
-    x = x+1;
-    
-    for(i = x; i > index; i--){
-	arr[i] = arr[i - 1];
-    }
-}
-
 
 int is_image_requested(char file[]){
     char extension[8];
